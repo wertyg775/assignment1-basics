@@ -81,10 +81,12 @@ def pretokenize(input_path: str, special_tokens: list[str]) -> dict[tuple[int, .
                     counts = pretokenization_dict(seg, PAT, counts)
     return counts
 
-def get_stats(key: tuple[int, ...], value: int, counts: dict):
+def get_stats(key: tuple[int, ...], value: int, counts: dict[tuple[int, int], int], index: dict[tuple[int, int], set[tuple[int, ...]]]):
     for pair in zip(key[:-1], key[1:]):
         counts[pair] = counts.get(pair, 0) + (1 * value)
-    return counts
+        index[pair] = index.get(pair, set())
+        index[pair].add(key)
+    return counts, index
 
 def merge(key, pair, idx):
     newids=[]
@@ -106,21 +108,31 @@ def train_bpe(input_path: str, vocab_size: int, special_tokens: list[str]):
     merges: list[tuple[bytes, bytes]] = []
     num_merges = vocab_size - 256 - len(special_tokens)   #vocab_size is defined as FINAL vocab
 
-    for i in range(num_merges):
-        counts = {}
-        for key, value in pretokenization_counts.items():
-            counts = get_stats(key, value, counts)
-        if not counts:
-            break
+    counts = {}
+    index = {}
+    for key, value in pretokenization_counts.items():
+        counts, index = get_stats(key, value, counts, index)
 
+    for i in range(num_merges):
         pair = max(counts, key=lambda p: (counts[p], (vocab[p[0]], vocab[p[1]])))
         idx = 256 + i
         vocab[idx] = vocab[pair[0]] + vocab[pair[1]]
-        merges.append((vocab[pair[0]], vocab[pair[1]]))   
-        pretokenization_counts = {
-            merge(key, pair, idx): value
-            for key, value in pretokenization_counts.items()
-        }
+        merges.append((vocab[pair[0]], vocab[pair[1]])) 
+        
+        for key in list(index[pair]):
+            value = pretokenization_counts.pop(key)
+            new_key = merge(key, pair, idx)
+
+            for p in zip(key[:-1], key[1:]):
+                counts[p] -= value
+                index[p].discard(key)
+
+            for p in zip(new_key[:-1], new_key[1:]):
+                counts[p] = counts.get(p, 0) + (1 * value)
+                index.setdefault(p, set()).add(new_key)
+            
+            pretokenization_counts[new_key] = value
+
 
     for tok in special_tokens:
         vocab[len(vocab)] = tok.encode("utf-8")
