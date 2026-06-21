@@ -1,10 +1,16 @@
 import os
 from typing import BinaryIO
+from multiprocessing import Pool
+from collections import Counter
 import regex as re
 from pathlib import Path
+import pickle
+import argparse
 
 root_path = Path.cwd()
-test_file = root_path / "data" / "TinyStoriesV2-GPT4-valid.txt"
+dummy_file = root_path / "data" / "TinyStoriesV2-GPT4-valid.txt"
+tinystories_file = root_path / "data" / "TinyStoriesV2-GPT4-train.txt"
+openweb_file = root_path / "data" / "owt_train.txt"
 
 #GPT-4 Tokenizer
 special_tokens = ["<|endoftext|>"]
@@ -64,22 +70,43 @@ def pretokenization_dict(text: str, PAT: re.Pattern, pretokenization_counts: dic
         pretokenization_counts[byte_tuple] = pretokenization_counts.get(byte_tuple, 0) + 1
     return pretokenization_counts
 
-def pretokenize(input_path: str, special_tokens: list[str]) -> dict[tuple[int, ...], int]:
-    escaped = [re.escape(t) for t in special_tokens]
-    split_pattern = re.compile("|".join(escaped)) if escaped else None
-    delim = special_tokens[0].encode("utf-8") if special_tokens else b"\n"
+def process_chunks(args):
+    input_path, start, end, special_tokens = args
 
+    escaped = [re.escape(t) for t in special_tokens]
+    split_pattern = re.compile(f"({"|".join(escaped)})")
     counts = {}
     with open(input_path, "rb") as f:
-        boundaries = find_chunk_boundaries(f, 4, delim)
-        for start, end in zip(boundaries[:-1], boundaries[1:]):
             f.seek(start)
             chunk = f.read(end - start).decode("utf-8", errors="ignore")
             segments = split_pattern.split(chunk) if split_pattern else [chunk]
             for seg in segments:
-                if seg:                      
+                if seg == special_tokens[0]:                      
+                    continue
+                elif seg == "":
+                    continue
+                else:
                     counts = pretokenization_dict(seg, PAT, counts)
+    
     return counts
+
+def pretokenize(input_path: str, special_tokens: list[str], num_processes: int | None = None):
+    num_processes = num_processes or os.cpu_count() or 1
+
+    with open(input_path, "rb") as f:
+        boundaries = find_chunk_boundaries(f, num_processes, b"<|endoftext|>")
+
+    tasks = [
+            (input_path, start, end, special_tokens)
+            for start, end in zip(boundaries[:-1], boundaries[1:])
+        ]
+    total: Counter[tuple[int, ...]] = Counter()
+    with Pool(num_processes) as pool:
+        for partial_counts in pool.imap_unordered(process_chunks, tasks):
+            total.update(partial_counts)
+    
+    return dict(total)
+
 
 def get_stats(key: tuple[int, ...], value: int, counts: dict[tuple[int, int], int], index: dict[tuple[int, int], set[tuple[int, ...]]]):
     for pair in zip(key[:-1], key[1:]):
@@ -133,8 +160,44 @@ def train_bpe(input_path: str, vocab_size: int, special_tokens: list[str]):
             
             pretokenization_counts[new_key] = value
 
+        del counts[pair]
+        del index[pair]
+
 
     for tok in special_tokens:
         vocab[len(vocab)] = tok.encode("utf-8")
 
     return vocab, merges
+
+def save_bpe(vocab: dict[int: bytes], merges: list[tuple[bytes, bytes]], vocab_path: str, merges_path: str):
+    with open(vocab_path, "wb") as f:
+        pickle.dump(vocab, f)
+    with open(merges_path, "wb") as f:
+        pickle.dump(merges, f)
+
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser()
+    parser.add_argument(
+        "--data",
+        choices=["tinystories", "openweb"],
+        required=True,
+        help = "dataset to train"
+    )
+
+    args = parser.parse_args()
+
+    if args.data == "tinystories":
+        input_file = tinystories_file
+        vocab_size = 10000
+        saved_path = root_path / "tokenizer" / "tinystories"
+    elif args.data == "openweb":
+        input_file = openweb_file
+        vocab_size = 32000
+        saved_path = root_path / "tokenizer" / "openweb"
+
+    
+    vocab, merges = train_bpe(input_file, vocab_size, special_tokens)
+    Path(saved_path).mkdir(parents=True, exist_ok=True)
+    vocab_path, merges_path = saved_path / "vocab.pkl" , saved_path / "merges.pkl"
+    save_bpe(vocab, merges, vocab_path, merges_path)
+
