@@ -13,7 +13,7 @@ tinystories_file = root_path / "data" / "TinyStoriesV2-GPT4-train.txt"
 openweb_file = root_path / "data" / "owt_train.txt"
 
 #GPT-4 Tokenizer
-special_tokens = ["<|endoftext|>"]
+SPECIAL_TOKENS = ["<|endoftext|>"]
 PAT = re.compile(r"""'(?i:'s|'t|'re|'ve|'m|'ll|'d)|[^\r\n\p{L}\p{N}]?\p{L}+|\p{N}{1,3}| ?[^\s\p{L}\p{N}]+[\r\n]*|\s*[\r\n]+|\s+(?!\S)|\s+""")
 
 def find_chunk_boundaries(
@@ -196,7 +196,7 @@ if __name__ == "__main__":
         saved_path = root_path / "tokenizer" / "openweb"
 
     
-    vocab, merges = train_bpe(input_file, vocab_size, special_tokens)
+    vocab, merges = train_bpe(input_file, vocab_size, SPECIAL_TOKENS)
     Path(saved_path).mkdir(parents=True, exist_ok=True)
     vocab_path, merges_path = saved_path / "vocab.pkl" , saved_path / "merges.pkl"
     save_bpe(vocab, merges, vocab_path, merges_path)
