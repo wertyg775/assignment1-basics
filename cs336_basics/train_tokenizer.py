@@ -6,6 +6,7 @@ import regex as re
 from pathlib import Path
 import pickle
 import argparse
+import time
 
 root_path = Path.cwd()
 dummy_file = root_path / "data" / "TinyStoriesV2-GPT4-valid.txt"
@@ -91,8 +92,9 @@ def process_chunks(args):
     return counts
 
 def pretokenize(input_path: str, special_tokens: list[str], num_processes: int | None = None):
-    num_processes = num_processes or os.cpu_count() or 1
-
+    num_processes = num_processes or 300
+    pool_size = 8
+    start = time.perf_counter()
     with open(input_path, "rb") as f:
         boundaries = find_chunk_boundaries(f, num_processes, b"<|endoftext|>")
 
@@ -101,10 +103,13 @@ def pretokenize(input_path: str, special_tokens: list[str], num_processes: int |
             for start, end in zip(boundaries[:-1], boundaries[1:])
         ]
     total: Counter[tuple[int, ...]] = Counter()
-    with Pool(num_processes) as pool:
+    with Pool(pool_size) as pool:
         for partial_counts in pool.imap_unordered(process_chunks, tasks):
             total.update(partial_counts)
     
+
+    end = time.perf_counter()
+    print(end - start)
     return dict(total)
 
 

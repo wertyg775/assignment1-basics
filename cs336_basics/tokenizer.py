@@ -5,6 +5,7 @@ from multiprocessing import Pool
 from collections import Counter
 import regex as re
 from pathlib import Path
+import argparse
 import pickle
 from collections.abc import Iterable, Iterator
 
@@ -84,6 +85,34 @@ class Tokenizer:
         
         return cls(vocab, merges, special_tokens)
 
+
+def main(vocab_filepath, merges_filepath):
+    tokenizer = Tokenizer.from_files(vocab_filepath, merges_filepath, SPECIAL_TOKENS)
+    print(tokenizer.encode("hello world"))
+
+if __name__ == "__main__":
+    root_path = Path(__file__).resolve().parents[1]
+    tokenizer_path = root_path / "tokenizer" 
+
+    parser = argparse.ArgumentParser()
+    parser.add_argument(
+        "--set",
+        choices = ["openweb", "tinystories"],
+        required=True,
+        help = "load a tokenizer"
+    )
+
+    args = parser.parse_args()
+
+    if args.set == "openweb":
+        dataset_path = tokenizer_path / "openweb"
+    elif args.set == "tinystories":
+        dataset_path = tokenizer_path / "tinystories"
+    
+    merges_filepath = dataset_path / "merges.pkl"
+    vocab_filepath = dataset_path / "vocab.pkl"
+
+    main(vocab_filepath, merges_filepath)
 
 
 
