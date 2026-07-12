@@ -10,9 +10,9 @@ class Linear(nn.Module):
         self.out_features = out_features
 
         factory_kwargs = {"device" : device, "dtype" : dtype}
-        self.weight = nn.Parameters(torch.empty(out_features, in_features, **factory_kwargs))
+        self.weight = nn.Parameter(torch.empty(out_features, in_features, **factory_kwargs))
 
-        std = math.sqrt(2 / out_features + in_features)
+        std = math.sqrt(2 / (out_features + in_features))
         nn.init.trunc_normal_(self.weight, mean = 0, std=std, a = -3*std, b=3*std)
 
     def forward(self, x):
@@ -29,7 +29,7 @@ class Embedding(nn.Module):
         factory_kwargs = {"device": device, "dtype": dtype}
         self.weight = nn.Parameter(torch.empty(num_embeddings, embedding_dim, **factory_kwargs))
 
-        nn.init.trunc_normal_(self.weight, mean = 0, std = 1.0, a = -3.0, b = 3.0)
+        nn.init.trunc_normal_(self.weight, mean = 0, std = 1.0, a = -3.0, b = 3.0) # a and b act as upper and lower bounds
 
     def forward(self, token_ids: torch.Tensor)-> torch.Tensor:
         return self.weight[token_ids]   
@@ -57,9 +57,9 @@ class RMSNorm(nn.Module):
         return result.to(in_dtype)
 
 
-class SwiGLU(nn.module):
-    def __init__(self, d_model, d_ff, int=None, device=None, dtype=None):
-        super.__init__()
+class SwiGLU(nn.Module):
+    def __init__(self, d_model: int, d_ff: int=None, device=None, dtype=None):
+        super().__init__()
         self.d_model = d_model
 
         if d_ff is None:
@@ -71,10 +71,20 @@ class SwiGLU(nn.module):
         self.w2 = Linear(d_ff, d_model, device=device, dtype=dtype)
 
     def forward(self, x):
-        silu_gate = self.w1(x) * torch.sigmoid(self.w1(x))
+        lin = self.w1(x)
+        silu_gate = lin * torch.sigmoid(lin)
         gated = silu_gate * self.w3(x)
 
         return self.w2(gated)
+
+if __name__ == "__main__":
+    test = torch.Tensor([[1,2,3,4], [5,6,7,8]])
+    in_shape = test.shape
+    weight = Linear(in_shape[1], 2 * in_shape[1])
+    out_shape = weight(test).shape
+
+    assert 2 * in_shape[1] == out_shape[1] , "Shape mismatch"
+
 
 
 
