@@ -14,7 +14,7 @@ class TransformerBlock(nn.Module):
         self.ffn_rmsnorm = mynn.RMSNorm(d_model, **factory_kwargs)
 
     def forward(self, x, token_positions=None):
-        z = x + self.attention_block(self.att_rmsnorm(x))
+        z = x + self.attention_block(self.att_rmsnorm(x), token_positions)
         y = z + self.ffn(self.ffn_rmsnorm(z))
 
         return y
