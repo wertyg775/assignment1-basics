@@ -73,12 +73,12 @@ class CausalMultiHeadSelfAttention(nn.Module):
 
     def forward(self, x, token_positions=None):
         B, T, C = x.shape
-        
+
         Q = self.query(x)
         K = self.key(x)
         V = self.value(x)
 
-        Q = rearrange("b t (h d_k) -> b h t dk", h=self.num_heads)
+        Q = rearrange("b t (h d_k) -> b h t d_k", h=self.num_heads)
         K = rearrange("b t (h d_k) -> b h t d_k", h=self.num_heads)
         V = rearrange("b t (h d_k) -> b h t d_k", h=self.num_heads)
 
@@ -89,3 +89,7 @@ class CausalMultiHeadSelfAttention(nn.Module):
         K = self.rope(K, token_positions)
 
         mask = torch.tril(torch.ones(T, T, dtype=torch.bool, device=x.device))
+
+        attention = scaled_dot_product_attention(Q, K, V, mask=mask) #compute self attention on each batch and head
+        attention = rearrange(attention, "b h t d_k -> b t (h d_k)") # concat and transform back into one d_model dim
+        return self.output(attention) #assimilate info across each attention head
