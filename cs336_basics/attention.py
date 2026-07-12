@@ -78,9 +78,9 @@ class CausalMultiHeadSelfAttention(nn.Module):
         K = self.key(x)
         V = self.value(x)
 
-        Q = rearrange("b t (h d_k) -> b h t d_k", h=self.num_heads)
-        K = rearrange("b t (h d_k) -> b h t d_k", h=self.num_heads)
-        V = rearrange("b t (h d_k) -> b h t d_k", h=self.num_heads)
+        Q = rearrange(Q, "b t (h d_k) -> b h t d_k", h=self.num_heads)
+        K = rearrange(K, "b t (h d_k) -> b h t d_k", h=self.num_heads)
+        V = rearrange(V, "b t (h d_k) -> b h t d_k", h=self.num_heads)
 
         if token_positions is None:
             token_positions = torch.arange(T, device=x.device)
