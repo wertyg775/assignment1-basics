@@ -25,7 +25,7 @@ class TransformerLM(nn.Module):
         factory_kwargs = {"device":device, "dtype":dtype}
         self.token_embedding_table = mynn.Embedding(vocab_size, d_model, **factory_kwargs)
         self.transformer_blocks = nn.ModuleList([TransformerBlock(d_model, d_ff, num_heads, context_length, theta, **factory_kwargs) for _ in range(num_layers)])
-        self.lm_rmsnorm(d_model, **factory_kwargs)
+        self.lm_rmsnorm = mynn.RMSNorm(d_model, **factory_kwargs)
         self.lm = mynn.Linear(d_model, vocab_size, **factory_kwargs)
 
     def forward(self, token_ids):
