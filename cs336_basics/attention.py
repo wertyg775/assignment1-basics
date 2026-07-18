@@ -4,15 +4,6 @@ from einops import rearrange
 import torch
 import math
 
-def softmax(x: torch.Tensor, dim: int):
-
-    x_max = torch.max(x, dim=dim, keepdim=True).values
-    x_shifted = x - x_max
-
-    exp_x = torch.exp(x_shifted)
-    sum_exp = torch.sum(exp_x, dim=dim, keepdim=True)
-    return exp_x / sum_exp
-
 class RotaryPositionalEmbedding(nn.Module):
 
     def __init__(self, theta: float, d_k: int, max_seq_len: int, device = None):
@@ -52,7 +43,7 @@ def scaled_dot_product_attention(Q: torch.Tensor, K: torch.Tensor, V: torch.Tens
     if mask is not None:
         scores = scores.masked_fill(mask == False, float("-inf"))
     
-    attn_weights = softmax(scores, dim=-1)
+    attn_weights = mynn.softmax(scores, dim=-1)
     out = torch.einsum("...qk,...kv->...qv", attn_weights, V)
     return out
 
