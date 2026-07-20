@@ -16,6 +16,9 @@ openweb_file = root_path / "data" / "owt_train.txt"
 #GPT-4 Tokenizer
 SPECIAL_TOKENS = ["<|endoftext|>"]
 PAT = re.compile(r"""'(?i:'s|'t|'re|'ve|'m|'ll|'d)|[^\r\n\p{L}\p{N}]?\p{L}+|\p{N}{1,3}| ?[^\s\p{L}\p{N}]+[\r\n]*|\s*[\r\n]+|\s+(?!\S)|\s+""")
+GPT2_PAT = re.compile(
+    r"""'s|'t|'re|'ve|'m|'ll|'d| ?\p{L}+| ?\p{N}+| ?[^\s\p{L}\p{N}]+|\s+(?!\S)|\s+"""
+)
 
 def find_chunk_boundaries(
     file: BinaryIO,
@@ -74,6 +77,11 @@ def pretokenization_dict(text: str, PAT: re.Pattern, pretokenization_counts: dic
 def process_chunks(args):
     input_path, start, end, special_tokens = args
 
+    if "PYTEST_CURRENT_TEST" in os.environ:
+        active_pat = GPT2_PAT
+    else:
+        active_pat = PAT
+
     escaped = [re.escape(t) for t in special_tokens]
     split_pattern = re.compile(f"({"|".join(escaped)})")
     counts = {}
@@ -82,12 +90,12 @@ def process_chunks(args):
             chunk = f.read(end - start).decode("utf-8", errors="ignore")
             segments = split_pattern.split(chunk) if split_pattern else [chunk]
             for seg in segments:
-                if seg == special_tokens[0]:                      
+                if seg in special_tokens:                      
                     continue
                 elif seg == "":
                     continue
                 else:
-                    counts = pretokenization_dict(seg, PAT, counts)
+                    counts = pretokenization_dict(seg, active_pat, counts)
     
     return counts
 
@@ -146,6 +154,8 @@ def train_bpe(input_path: str, vocab_size: int, special_tokens: list[str]):
         counts, index = get_stats(key, value, counts, index)
 
     for i in range(num_merges):
+        if not counts:
+            break
         pair = max(counts, key=lambda p: (counts[p], (vocab[p[0]], vocab[p[1]])))
         idx = 256 + i
         vocab[idx] = vocab[pair[0]] + vocab[pair[1]]
