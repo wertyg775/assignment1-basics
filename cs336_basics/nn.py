@@ -45,6 +45,8 @@ class RMSNorm(nn.Module):
         factory_kwargs = {"device":device, "dtype": dtype}
         self.weight = nn.Parameter(torch.empty(d_model, **factory_kwargs)) # ** unpacks the keywords argument at the call site
 
+        nn.init.trunc_normal_(self.weight, mean=0, std=1.0, a=-3.0, b=3.0)
+        
     def forward(self, x: torch.Tensor)-> torch.Tensor :
         in_dtype = x.dtype
         x = x.to(torch.float32)
