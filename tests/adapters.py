@@ -31,8 +31,10 @@ def run_linear(
     Returns:
         Float[Tensor, "... d_out"]: The transformed output of your linear module.
     """
-
-    raise NotImplementedError
+    lin = mynn.Linear(d_in, d_out)
+    tensor_dict = {"weight": weights}
+    lin.load_state_dict(tensor_dict)
+    return lin(in_features)
 
 
 def run_embedding(
@@ -53,8 +55,11 @@ def run_embedding(
     Returns:
         Float[Tensor, "... d_model"]: Batch of embeddings returned by your Embedding layer.
     """
+    embed = mynn.Embedding(vocab_size, d_model)
+    state_dict = {"weight": weights}
+    embed.load_state_dict(state_dict)
 
-    raise NotImplementedError
+    return embed(token_ids)
 
 
 def run_swiglu(
@@ -434,7 +439,7 @@ def run_softmax(in_features: Float[Tensor, " ..."], dim: int) -> Float[Tensor, "
         Float[Tensor, "..."]: Tensor of with the same shape as `in_features` with the output of
         softmax normalizing the specified `dim`.
     """
-    raise NotImplementedError
+    return mynn.softmax(in_features, dim)
 
 
 def run_cross_entropy(
