@@ -21,6 +21,9 @@ class RotaryPositionalEmbedding(nn.Module):
     
     def forward(self, x: torch.Tensor, token_positions: torch.Tensor) -> torch.Tensor:
         # x: (..., seq_len, d_k), token_positions: (..., seq_len)
+        in_dtype = x.dtype
+        x = x.to(torch.float32)
+
         cos = self.cos_cached[token_positions]  # (..., seq_len, d_k/2)
         sin = self.sin_cached[token_positions]  # (..., seq_len, d_k/2)
 
@@ -33,7 +36,7 @@ class RotaryPositionalEmbedding(nn.Module):
         # interleave back: (x1_rot[0], x2_rot[0], x1_rot[1], x2_rot[1], ...)
         out = torch.stack([x1_rot, x2_rot], dim=-1)
         out = rearrange(out, "... d two -> ... (d two)")
-        return out
+        return out.to(in_dtype)
 
 def scaled_dot_product_attention(Q: torch.Tensor, K: torch.Tensor, V: torch.Tensor, mask: torch.Tensor | None = None):
     d_k = Q.shape[-1]
@@ -55,19 +58,19 @@ class CausalMultiHeadSelfAttention(nn.Module):
         self.d_k = d_model // num_heads
         factory_kwargs = {"device": device, "dtype": dtype}
 
-        self.query = mynn.Linear(d_model, d_model, **factory_kwargs)
-        self.key = mynn.Linear(d_model, d_model, **factory_kwargs)
-        self.value = mynn.Linear(d_model, d_model, **factory_kwargs)
-        self.output = mynn.Linear(d_model, d_model, **factory_kwargs)
+        self.q_proj = mynn.Linear(d_model, d_model, **factory_kwargs)
+        self.k_proj = mynn.Linear(d_model, d_model, **factory_kwargs)
+        self.v_proj = mynn.Linear(d_model, d_model, **factory_kwargs)
+        self.output_proj = mynn.Linear(d_model, d_model, **factory_kwargs)
 
-        self.rope = RotaryPositionalEmbedding(theta, self.d_k, max_seq_len, **factory_kwargs)
+        self.rope = RotaryPositionalEmbedding(theta, self.d_k, max_seq_len, device=device)
 
     def forward(self, x, token_positions=None):
         B, T, C = x.shape
 
-        Q = self.query(x)
-        K = self.key(x)
-        V = self.value(x)
+        Q = self.q_proj(x)
+        K = self.k_proj(x)
+        V = self.v_proj(x)
 
         Q = rearrange(Q, "b t (h d_k) -> b h t d_k", h=self.num_heads)
         K = rearrange(K, "b t (h d_k) -> b h t d_k", h=self.num_heads)
@@ -83,4 +86,4 @@ class CausalMultiHeadSelfAttention(nn.Module):
 
         attention = scaled_dot_product_attention(Q, K, V, mask=mask) #compute self attention on each batch and head
         attention = rearrange(attention, "b h t d_k -> b t (h d_k)") # concat and transform back into one d_model dim
-        return self.output(attention) #assimilate info across each attention head
+        return self.output_proj(attention) #assimilate info across each attention head

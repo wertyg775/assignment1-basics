@@ -8,14 +8,14 @@ class TransformerBlock(nn.Module):
     def __init__(self, d_model, d_ff, num_heads, max_seq_len, theta, device=None, dtype=None):
         super().__init__()
         factory_kwargs = {"device": device, "dtype":dtype}
-        self.attention_block = attention.CausalMultiHeadSelfAttention(d_model, num_heads, max_seq_len, theta, **factory_kwargs)
+        self.attn = attention.CausalMultiHeadSelfAttention(d_model, num_heads, max_seq_len, theta, **factory_kwargs)
         self.ffn = mynn.SwiGLU(d_model, d_ff, **factory_kwargs)
-        self.att_rmsnorm = mynn.RMSNorm(d_model, **factory_kwargs)
-        self.ffn_rmsnorm = mynn.RMSNorm(d_model, **factory_kwargs)
+        self.ln1 = mynn.RMSNorm(d_model, **factory_kwargs)
+        self.ln2 = mynn.RMSNorm(d_model, **factory_kwargs)
 
     def forward(self, x, token_positions=None):
-        z = x + self.attention_block(self.att_rmsnorm(x), token_positions)
-        y = z + self.ffn(self.ffn_rmsnorm(z))
+        z = x + self.attn(self.ln1(x), token_positions)
+        y = z + self.ffn(self.ln2(z))
 
         return y
 
