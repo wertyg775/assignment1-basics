@@ -1,7 +1,5 @@
 import os
-import sys
 from typing import BinaryIO
-from multiprocessing import Pool
 from collections import Counter
 import regex as re
 from pathlib import Path
@@ -9,9 +7,8 @@ import argparse
 import pickle
 from collections.abc import Iterable, Iterator
 
-sys.path.append(str(Path(__file__).resolve().parent))
 
-from train_tokenizer import PAT, SPECIAL_TOKENS, get_stats, merge
+from cs336_basics.train_tokenizer import PAT, SPECIAL_TOKENS, get_stats, merge
 
 class Tokenizer:
     def __init__(self, vocab, merges, special_tokens=None):
