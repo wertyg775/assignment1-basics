@@ -23,7 +23,7 @@ class Embedding(nn.Module):
     def __init__(self, num_embeddings, embedding_dim, device=None, dtype=None):
         super().__init__()
 
-        self.num_embeddings = num_embeddings
+        self.num_embeddings = num_embeddings ## vocab size
         self.embedding_dim = embedding_dim
 
         factory_kwargs = {"device": device, "dtype": dtype}
@@ -46,7 +46,7 @@ class RMSNorm(nn.Module):
         self.weight = nn.Parameter(torch.empty(d_model, **factory_kwargs)) # ** unpacks the keywords argument at the call site
 
         nn.init.trunc_normal_(self.weight, mean=0, std=1.0, a=-3.0, b=3.0)
-        
+
     def forward(self, x: torch.Tensor)-> torch.Tensor :
         in_dtype = x.dtype
         x = x.to(torch.float32)
