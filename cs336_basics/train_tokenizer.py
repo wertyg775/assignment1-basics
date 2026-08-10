@@ -15,7 +15,7 @@ openweb_file = root_path / "data" / "owt_train.txt"
 
 #GPT-4 Tokenizer
 SPECIAL_TOKENS = ["<|endoftext|>"]
-PAT = re.compile(r"""'(?i:'s|'t|'re|'ve|'m|'ll|'d)|[^\r\n\p{L}\p{N}]?\p{L}+|\p{N}{1,3}| ?[^\s\p{L}\p{N}]+[\r\n]*|\s*[\r\n]+|\s+(?!\S)|\s+""")
+GPT4_PAT = re.compile(r"""'(?i:'s|'t|'re|'ve|'m|'ll|'d)|[^\r\n\p{L}\p{N}]?\p{L}+|\p{N}{1,3}| ?[^\s\p{L}\p{N}]+[\r\n]*|\s*[\r\n]+|\s+(?!\S)|\s+""")
 GPT2_PAT = re.compile(
     r"""'s|'t|'re|'ve|'m|'ll|'d| ?\p{L}+| ?\p{N}+| ?[^\s\p{L}\p{N}]+|\s+(?!\S)|\s+"""
 )
@@ -66,8 +66,8 @@ def find_chunk_boundaries(
     # Make sure all boundaries are unique, but might be fewer than desired_num_chunks
     return sorted(set(chunk_boundaries))
 
-def pretokenization_dict(text: str, PAT: re.Pattern, pretokenization_counts: dict[tuple[int, ...], int]) -> dict[tuple[int, ...], int]:
-    pre_tokens = re.finditer(PAT, text)
+def pretokenization_dict(text: str, GPT4_PAT: re.Pattern, pretokenization_counts: dict[tuple[int, ...], int]) -> dict[tuple[int, ...], int]:
+    pre_tokens = re.finditer(GPT4_PAT, text)
     for token in pre_tokens:    
         byte_sequence = token.group().encode("utf-8")
         byte_tuple = tuple(byte_sequence) #eg. (101, 125, 130)
@@ -80,7 +80,7 @@ def process_chunks(args):
     if "PYTEST_CURRENT_TEST" in os.environ:
         active_pat = GPT2_PAT
     else:
-        active_pat = PAT
+        active_pat = GPT4_PAT
 
     escaped = [re.escape(t) for t in special_tokens]
     split_pattern = re.compile(f"({"|".join(escaped)})")

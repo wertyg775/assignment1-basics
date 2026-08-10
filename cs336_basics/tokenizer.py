@@ -8,29 +8,30 @@ import pickle
 from collections.abc import Iterable, Iterator
 
 
-from cs336_basics.train_tokenizer import PAT, SPECIAL_TOKENS, get_stats, merge
+from cs336_basics.train_tokenizer import GPT2_PAT, GPT4_PAT, SPECIAL_TOKENS, get_stats, merge
 
 class Tokenizer:
-    def __init__(self, vocab, merges, special_tokens=None):
+    def __init__(self, vocab, merges, special_tokens=None, pattern=GPT2_PAT):
         self.vocab = vocab
         self.special_tokens = special_tokens or []
-        
+        self.pattern = pattern
 
         self.special_tokens_id = {}
-        reverse_vocab = {byte_seq: id for id, byte_seq in self.vocab.items()}
+        self.reverse_vocab = {byte_seq: id for id, byte_seq in self.vocab.items()}
         for special in self.special_tokens:
             byte_special = special.encode("utf-8")
-            self.special_tokens_id[special] = reverse_vocab[byte_special]
+            self.special_tokens_id[special] = self.reverse_vocab[byte_special]
         
         self.merges = {}
         for b1, b2 in merges:
-            key = (reverse_vocab[b1], reverse_vocab[b2])
-            self.merges[key] = reverse_vocab[b1+b2]
+            key = (self.reverse_vocab[b1], self.reverse_vocab[b2])
+            self.merges[key] = self.reverse_vocab[b1+b2]
 
     def encode(self, text: str) -> list[int]:
         if not self.special_tokens:
             return self.encode_chunks(text)
-
+        
+        self.special_tokens.sort(key=len, reverse=True)
         escaped = [re.escape(t) for t in self.special_tokens]
         split_pattern = re.compile(f"({"|".join(escaped)})")
 
@@ -48,8 +49,9 @@ class Tokenizer:
     
     def encode_chunks(self, text: str)-> list[int]:
         tokens = []
-        for token in re.finditer(PAT, text):
-            token = tuple(token.group().encode("utf-8"))
+        for token in re.finditer(self.pattern, text):
+            token = token.group().encode("utf-8")
+            token = tuple(self.reverse_vocab[bytes([t])] for t in token)
             while len(token) >= 2:
                 counts={}
                 for pair in zip(token[:-1], token[1:]):
@@ -74,11 +76,13 @@ class Tokenizer:
         return text
     
     @classmethod
-    def from_files(cls, vocab_filepath, merges_filepath, special_tokens=None):
+    def from_files(cls, vocab_filepath, merges_filepath, special_tokens=None, pattern=GPT4_PAT):
         with open(vocab_filepath, "rb") as f:
             vocab = pickle.load(f)
         with open(merges_filepath, "rb") as f:
             merges = pickle.load(f)
+
+        
         
         return cls(vocab, merges, special_tokens)
 
