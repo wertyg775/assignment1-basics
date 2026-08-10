@@ -11,6 +11,7 @@ from torch import Tensor
 
 from cs336_basics.train_tokenizer import train_bpe
 from cs336_basics import nn as mynn
+from cs336_basics import attention
 
 
 def run_linear(
@@ -120,7 +121,7 @@ def run_scaled_dot_product_attention(
     Returns:
         Float[Tensor, " ... queries d_v"]: Output of SDPA
     """
-    raise NotImplementedError
+    return attention.scaled_dot_product_attention(Q, K, V, mask)
 
 
 def run_multihead_self_attention(
