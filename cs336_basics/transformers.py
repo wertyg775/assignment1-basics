@@ -5,10 +5,11 @@ from cs336_basics import attention
 import math
 
 class TransformerBlock(nn.Module):
-    def __init__(self, d_model, d_ff, num_heads, max_seq_len, theta, device=None, dtype=None):
+    def __init__(self, d_model, d_ff, num_heads, rope=None, device=None, dtype=None):
         super().__init__()
         factory_kwargs = {"device": device, "dtype":dtype}
-        self.attn = attention.CausalMultiHeadSelfAttention(d_model, num_heads, max_seq_len, theta, **factory_kwargs)
+        self.rope = rope
+        self.attn = attention.CausalMultiHeadSelfAttention(d_model, num_heads, self.rope, **factory_kwargs)
         self.ffn = mynn.SwiGLU(d_model, d_ff, **factory_kwargs)
         self.ln1 = mynn.RMSNorm(d_model, **factory_kwargs)
         self.ln2 = mynn.RMSNorm(d_model, **factory_kwargs)
@@ -24,7 +25,9 @@ class TransformerLM(nn.Module):
         super().__init__()
         factory_kwargs = {"device":device, "dtype":dtype}
         self.token_embeddings = mynn.Embedding(vocab_size, d_model, **factory_kwargs)
-        self.layers = nn.ModuleList([TransformerBlock(d_model, d_ff, num_heads, context_length, theta, **factory_kwargs) for _ in range(num_layers)])
+        self.d_k = d_model // num_heads
+        self.rope = attention.RotaryPositionalEmbedding(theta, self.d_k, context_length)
+        self.layers = nn.ModuleList([TransformerBlock(d_model, d_ff, num_heads, self.rope, **factory_kwargs) for _ in range(num_layers)])
         self.ln_final= mynn.RMSNorm(d_model, **factory_kwargs)
         self.lm_head = mynn.Linear(d_model, vocab_size, **factory_kwargs)
 
