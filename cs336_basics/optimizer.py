@@ -29,14 +29,14 @@ class SGD(torch.optim.Optimizer):
 
 
 class AdamW(torch.optim.Optimizer):
-    def __init__(self, params, lr=1e-3, beta=(0.9, 0.1), eps=1e-8, wd=1e-5):
+    def __init__(self, params, lr=1e-3, betas=(0.9, 0.95), eps=1e-8, weight_decay=1e-5):
         if lr < 0:
             raise ValueError(f"Invalid learning rate: {lr}")
 
-        if wd < 0:
-            raise ValueError(f"Invalid weight_decay: {wd}")
+        if weight_decay < 0:
+            raise ValueError(f"Invalid weight_decay: {weight_decay}")
 
-        defaults = {"lr": lr, "beta": beta, "eps": eps, "wd": wd}
+        defaults = {"lr": lr, "betas": betas, "eps": eps, "weight_decay": weight_decay}
         super().__init__(params, defaults)
 
     def step(self, closure=None):
@@ -44,10 +44,10 @@ class AdamW(torch.optim.Optimizer):
 
         for group in self.param_groups:
             lr = group["lr"]
-            beta_1 = group["beta"][0]
-            beta_2 = group["beta"][1]
+            beta_1 = group["betas"][0]
+            beta_2 = group["betas"][1]
             eps = group["eps"]
-            wd = group["wd"]
+            weight_decay = group["weight_decay"]
 
             for p in group["params"]:
                 if p.grad is None:
@@ -66,16 +66,29 @@ class AdamW(torch.optim.Optimizer):
                 exp_avg = state["exp_avg"]
                 exp_avg_sq = state["exp_avg_sq"]
 
-                
                 grad = p.grad.data
+
                 exp_avg = (beta_1 * exp_avg + (1 - beta_1) * grad)
                 exp_avg_sq = (beta_2 * exp_avg_sq + (1 - beta_2) * grad.pow(2))
+                state["exp_avg"] = exp_avg
+                state["exp_avg_sq"] = exp_avg_sq
 
                 m_hat = exp_avg / (1 - beta_1 ** t)
                 v_hat = exp_avg_sq / (1 - beta_2 ** t)
 
-                p.data = (1 - lr * wd) * p.data - (wd * m_hat) / (v_hat.sqrt() + eps)
+                p.data = (1 - lr * weight_decay) * p.data - (lr * m_hat) / (v_hat.sqrt() + eps)
 
         return loss
 
-                
+
+def cosine_scheduling(t, a_max, a_min, t_w, t_c):
+    if t < t_w:
+        lr = (t / t_w) * a_max
+        return lr
+
+    if t >= t_w and t <= t_c:
+        lr = a_min + 0.5 * (1 + math.cos((t - t_w) / (t_c - t_w) * math.pi) ) * (a_max - a_min)
+        return lr
+
+    if t > t_c:
+        return a_min           
