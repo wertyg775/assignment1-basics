@@ -173,71 +173,118 @@ def merge(key, pair, idx):
 def train_bpe(input_path: str, vocab_size: int, special_tokens: list[str], **kwargs):
     pretokenization_counts = pretokenize(input_path, special_tokens, **kwargs)
 
-    # Time BPE merges
     start = time.perf_counter()
 
     vocab = {i: bytes([i]) for i in range(256)}
     merges: list[tuple[bytes, bytes]] = []
-    num_merges = vocab_size - 256 - len(special_tokens)   #vocab_size is defined as FINAL vocab
+    num_merges = vocab_size - 256 - len(special_tokens)
 
-    counts = {}
-    index = {}
-    for key, value in pretokenization_counts.items():
-        counts, index = get_stats(key, value, counts, index)
+    words: list[list[int]] = []
+    word_counts: list[int] = []
+    
+    pair_counts: Counter[tuple[int, int]] = Counter()
+    # Inverted index: pair -> set of word indices where this pair occurs
+    pair_to_word_indices: dict[tuple[int, int], set[int]] = {}
 
-    heap = [(-count, (vocab[p[0]], vocab[p[1]]), p) for p, count in counts.items()]
+    for w_idx, (token_tuple, count) in enumerate(pretokenization_counts.items()):
+        word = list(token_tuple)
+        words.append(word)
+        word_counts.append(count)
+        
+        for i in range(len(word) - 1):
+            pair = (word[i], word[i + 1])
+            pair_counts[pair] += count
+            if pair not in pair_to_word_indices:
+                pair_to_word_indices[pair] = set()
+            pair_to_word_indices[pair].add(w_idx)
+
+    heap = [
+        (-count, (vocab.get(p[0], b""), vocab.get(p[1], b"")), p) 
+        for p, count in pair_counts.items() if count > 0
+    ]
     heapq.heapify(heap)
 
-
-    loop_start = time.perf_counter()
-    
     for i in range(num_merges):
+        loop_start = time.perf_counter()
+
+        # Pop top valid pair
+        best_pair = None
         while heap:
             neg_count, _, pair = heapq.heappop(heap)
-            if pair in counts and counts[pair] == -neg_count:
+            if pair in pair_counts and pair_counts[pair] == -neg_count:
+                best_pair = pair
                 break
         
-        else:
+        if best_pair is None or pair_counts.get(best_pair, 0) <= 0:
+            print("No more valid pairs to merge.")
             break
 
         idx = 256 + i
-        vocab[idx] = vocab[pair[0]] + vocab[pair[1]]
-        merges.append((vocab[pair[0]], vocab[pair[1]])) 
-        
-        for key in list(index.get(pair, ())):
-            if key not in pretokenization_counts:
-                continue
+        vocab[idx] = vocab[best_pair[0]] + vocab[best_pair[1]]
+        merges.append((vocab[best_pair[0]], vocab[best_pair[1]]))
 
-            value = pretokenization_counts.pop(key)
-            new_key = merge(key, pair, idx)
+        matching_words = list(pair_to_word_indices.get(best_pair, ()))
+        changed_pairs: set[tuple[int, int]] = set()
 
-            for p in zip(key[:-1], key[1:]):
-                counts[p] -= value
-                index[p].discard(key)
-                if counts[p] > 0:
-                    heapq.heappush(heap, (-counts[p], (vocab[p[0]], vocab[p[1]]), p))
-
-            for p in zip(new_key[:-1], new_key[1:]):
-                counts[p] = counts.get(p, 0) + (1 * value)
-                index.setdefault(p, set()).add(new_key)
-                heapq.heappush(heap, (-counts[p], (vocab[p[0]], vocab[p[1]]), p))
+        for w_idx in matching_words:
+            w = words[w_idx]
+            freq = word_counts[w_idx]
             
-            pretokenization_counts[new_key] = value
+            # Find all positions of best_pair in the word
+            j = 0
+            new_w = []
+            while j < len(w):
+                if j < len(w) - 1 and w[j] == best_pair[0] and w[j + 1] == best_pair[1]:
+                    # Remove adjacent pair before the match
+                    if new_w:
+                        old_prev_pair = (new_w[-1], w[j])
+                        pair_counts[old_prev_pair] -= freq
+                        changed_pairs.add(old_prev_pair)
+                    
+                    # Remove adjacent pair after the match
+                    if j + 2 < len(w):
+                        old_next_pair = (w[j + 1], w[j + 2])
+                        pair_counts[old_next_pair] -= freq
+                        changed_pairs.add(old_next_pair)
 
-        counts.pop(pair, None)
-        index.pop(pair, None)
+                    new_w.append(idx)
+
+                    # Add new formed pairs
+                    if len(new_w) >= 2:
+                        new_prev_pair = (new_w[-2], new_w[-1])
+                        pair_counts[new_prev_pair] += freq
+                        changed_pairs.add(new_prev_pair)
+                        pair_to_word_indices.setdefault(new_prev_pair, set()).add(w_idx)
+
+                    j += 2
+                    if j < len(w):
+                        new_next_pair = (new_w[-1], w[j])
+                        pair_counts[new_next_pair] += freq
+                        changed_pairs.add(new_next_pair)
+                        pair_to_word_indices.setdefault(new_next_pair, set()).add(w_idx)
+                else:
+                    new_w.append(w[j])
+                    j += 1
+
+            words[w_idx] = new_w
+
+        pair_counts.pop(best_pair, None)
+        pair_to_word_indices.pop(best_pair, None)
+
+        for cp in changed_pairs:
+            c = pair_counts.get(cp, 0)
+            if c > 0:
+                heapq.heappush(heap, (-c, (vocab.get(cp[0], b""), vocab.get(cp[1], b"")), cp))
 
         loop_end = time.perf_counter()
-
-        print(f"Merge no: {i} , vocab size: {idx} , loop time: {loop_end - loop_start:.2f}s")
-
+        if i % 100 == 0 or i < 10:
+            print(f"Merge {i}/{num_merges} (vocab: {idx}) - Step time: {loop_end - loop_start:.4f}s")
 
     for tok in special_tokens:
         vocab[len(vocab)] = tok.encode("utf-8")
 
     end = time.perf_counter()
-    print(f"BPE Merges took: {end - start:.2f}s")
-
+    print(f"BPE Merges completed in: {end - start:.2f}s")
     return vocab, merges
 
 def save_bpe(vocab: dict[int: bytes], merges: list[tuple[bytes, bytes]], vocab_path: str, merges_path: str):
