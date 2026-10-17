@@ -82,6 +82,14 @@ class AdamW(torch.optim.Optimizer):
 
 
 def cosine_scheduling(t, a_max, a_min, t_w, t_c):
+    """Cosine scheduling adjusts learning rate(lr) during training.
+    General idea is:
+
+    large lr , fast for early training but may overshoot at late training.
+    small lr , slow for early training but stabilises at late training.
+    
+    Cosine scheduling aims to capture both advantages.
+    """
     if t < t_w:
         lr = (t / t_w) * a_max
         return lr
@@ -91,4 +99,24 @@ def cosine_scheduling(t, a_max, a_min, t_w, t_c):
         return lr
 
     if t > t_c:
-        return a_min           
+        return a_min       
+
+def clip_grad_norm(parameters, max_l2_norm, eps=1e-6):
+    parameters = list(parameters)
+    
+    grads = [p.grad for p in parameters if p.grad is not None]
+
+    total_sq = 0
+    for g in grads:
+        total_sq += (g ** 2).sum()
+    l2_norm = total_sq ** 0.5
+
+    if l2_norm > max_l2_norm:
+        factor = max_l2_norm / (l2_norm + eps)
+        
+        for p in parameters:
+            if p.grad is not None:    
+                p.grad.mul_(factor)
+
+    return l2_norm
+
