@@ -188,6 +188,9 @@ def train_bpe(input_path: str, vocab_size: int, special_tokens: list[str], **kwa
     heap = [(-count, (vocab[p[0]], vocab[p[1]]), p) for p, count in counts.items()]
     heapq.heapify(heap)
 
+
+    loop_start = time.perf_counter()
+    
     for i in range(num_merges):
         while heap:
             neg_count, _, pair = heapq.heappop(heap)
@@ -223,6 +226,10 @@ def train_bpe(input_path: str, vocab_size: int, special_tokens: list[str], **kwa
 
         counts.pop(pair, None)
         index.pop(pair, None)
+
+        loop_end = time.perf_counter()
+
+        print(f"Merge no: {i} , vocab size: {idx} , loop time: {loop_end - loop_start:.2f}s")
 
 
     for tok in special_tokens:
