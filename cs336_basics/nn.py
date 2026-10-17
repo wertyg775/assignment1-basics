@@ -81,13 +81,15 @@ class SwiGLU(nn.Module):
 
         return self.w2(gated)
 
-def softmax(x: torch.Tensor, dim: int):
+def softmax(x: torch.Tensor, dim: int, temp: float | None):
+    if temp is None:
+        temp = 1.0
 
     x_max = torch.max(x, dim=dim, keepdim=True).values
     x_shifted = x - x_max
 
-    exp_x = torch.exp(x_shifted)
-    sum_exp = torch.sum(exp_x, dim=dim, keepdim=True)
+    exp_x = torch.exp(x_shifted / temp)
+    sum_exp = torch.sum(exp_x / temp, dim=dim, keepdim=True)
     return exp_x / sum_exp
 
 def cross_entropy(logits: torch.Tensor, target: torch.Tensor) -> torch.Tensor:

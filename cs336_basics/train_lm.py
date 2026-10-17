@@ -6,6 +6,7 @@ import time
 import numpy as np
 import torch
 from pathlib import Path
+import wandb
 
 from cs336_basics.nn import cross_entropy
 from cs336_basics.transformers import TransformerLM
@@ -40,7 +41,7 @@ def estimate_loss(
     for k in range(eval_iters):
         x, y = get_batch(data, batch_size, context_length, device)
         logits = model(x)  # (B, T, vocab_size)
-        loss = cross_entropy(logits.view(-1, logits.size(-1)), y.view(-1))
+        loss = cross_entropy(logits, y)
         losses[k] = loss.item()
     model.train()
     return losses.mean().item()
@@ -49,6 +50,12 @@ def estimate_loss(
 def parse_args():
     parser = argparse.ArgumentParser(
         description="Train CS336 Transformer Language Model"
+    )
+
+    # for real training run
+    parser.add_argument(
+        "--execute",
+        help="Command flag for live training run"
     )
 
     # Data
@@ -99,7 +106,6 @@ def parse_args():
         default=None,
         help="Path to checkpoint file to resume from",
     )
-
     return parser.parse_args()
 
 
@@ -146,7 +152,7 @@ def main():
         {"params": decay_params, "weight_decay": args.weight_decay},
         {"params": nodecay_params, "weight_decay": 0.0},
     ]
-    optimizer = torch.optim.AdamW(
+    optimizer = AdamW(
         optim_groups, lr=args.lr, betas=(0.9, 0.95), eps=1e-8
     )
 
@@ -180,7 +186,7 @@ def main():
 
         # Forward pass
         logits = model(x)  # shape: (B, T, vocab_size)
-        loss = cross_entropy(logits.view(-1, logits.size(-1)), y.view(-1))
+        loss = cross_entropy(logits, y)
 
         # Backward pass & optimization step
         optimizer.zero_grad(set_to_none=True)

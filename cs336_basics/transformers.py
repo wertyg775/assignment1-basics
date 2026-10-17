@@ -40,3 +40,49 @@ class TransformerLM(nn.Module):
 
         x = self.lm_head(self.ln_final(x))
         return x
+
+    def decode(self, x, max_tokens, top_p=0.9, temp=1.0):
+        for _ in range(max_tokens):
+            logits = self.forward(x)
+            logits = logits[:, -1, :]  # (batch_size, vocab_size)
+
+            probs = mynn.softmax(logits, dim=-1, temp=temp)
+
+            sorted_probs, sorted_indices = torch.sort(
+                probs, descending=True, dim=-1
+            )
+
+            # Cumulative probabilities
+            cumulative_probs = torch.cumsum(sorted_probs, dim=-1)
+
+            # Identify tokens to remove
+            sorted_indices_to_remove = cumulative_probs > top_p
+            sorted_indices_to_remove[..., 1:] = (
+                sorted_indices_to_remove[..., :-1].clone()
+            )
+            sorted_indices_to_remove[..., 0] = False
+
+            # Map removal mask back to original vocabulary order
+            indices_to_remove = torch.zeros_like(
+                sorted_indices_to_remove
+            ).scatter(
+                dim=-1,
+                index=sorted_indices,
+                src=sorted_indices_to_remove
+            )
+
+            # Remove tokens outside the nucleus
+            probs[indices_to_remove] = 0.0
+
+            # Renormalize probabilities
+            probs = probs / probs.sum(dim=-1, keepdim=True)
+
+            # Sample the next token
+            next_token = torch.multinomial(probs, num_samples=1)
+
+            # Append the new token to the sequence
+            x = torch.cat((x, next_token), dim=1)
+
+        return x
+
+
