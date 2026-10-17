@@ -79,13 +79,13 @@ def parse_args():
     parser.add_argument("--vocab_size", type=int, default=10000)
     parser.add_argument("--context_length", type=int, default=256)
     parser.add_argument("--num_layers", type=int, default=4)
-    parser.add_argument("--d_model", type=int, default=256)
-    parser.add_argument("--d_ff", type=int, default=1024)
-    parser.add_argument("--num_heads", type=int, default=4)
+    parser.add_argument("--d_model", type=int, default=512)
+    parser.add_argument("--d_ff", type=int, default=1344)
+    parser.add_argument("--num_heads", type=int, default=16)
     parser.add_argument("--theta", type=float, default=10000.0)
 
     # Training & Optimization
-    parser.add_argument("--batch_size", type=int, default=32)
+    parser.add_argument("--batch_size", type=int, default=256)
     parser.add_argument("--max_iters", type=int, default=5000)
     parser.add_argument("--lr", type=float, default=3e-3)
     parser.add_argument("--min_lr", type=float, default=3e-4)
