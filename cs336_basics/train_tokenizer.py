@@ -183,7 +183,6 @@ def train_bpe(input_path: str, vocab_size: int, special_tokens: list[str], **kwa
     word_counts: list[int] = []
     
     pair_counts: Counter[tuple[int, int]] = Counter()
-    # Inverted index: pair -> set of word indices where this pair occurs
     pair_to_word_indices: dict[tuple[int, int], set[int]] = {}
 
     for w_idx, (token_tuple, count) in enumerate(pretokenization_counts.items()):
@@ -194,10 +193,13 @@ def train_bpe(input_path: str, vocab_size: int, special_tokens: list[str], **kwa
         for i in range(len(word) - 1):
             pair = (word[i], word[i + 1])
             pair_counts[pair] += count
+
             if pair not in pair_to_word_indices:
                 pair_to_word_indices[pair] = set()
+
             pair_to_word_indices[pair].add(w_idx)
 
+    # (-count, byte of p, (p0, p1) ) byte of p for deterministic tie-break on same frequency pairs.
     heap = [
         (-count, (vocab.get(p[0], b""), vocab.get(p[1], b"")), p) 
         for p, count in pair_counts.items() if count > 0
@@ -207,7 +209,7 @@ def train_bpe(input_path: str, vocab_size: int, special_tokens: list[str], **kwa
     for i in range(num_merges):
         loop_start = time.perf_counter()
 
-        # Pop top valid pair
+        # Pop top valid pair. Implicitly sorted by frequency due to pretokenization_counts
         best_pair = None
         while heap:
             neg_count, _, pair = heapq.heappop(heap)
